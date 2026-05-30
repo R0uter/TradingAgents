@@ -40,29 +40,30 @@ def create_portfolio_manager(llm):
             else ""
         )
 
-        prompt = f"""As the Portfolio Manager, synthesize the risk analysts' debate and deliver the final trading decision.
-
-{instrument_context}
-
----
-
-**Rating Scale** (use exactly one):
-- **Buy**: Strong conviction to enter or add to position
-- **Overweight**: Favorable outlook, gradually increase exposure
-- **Hold**: Maintain current position, no action needed
-- **Underweight**: Reduce exposure, take partial profits
-- **Sell**: Exit position or avoid entry
-
-**Context:**
-- Research Manager's investment plan: **{research_plan}**
-- Trader's transaction proposal: **{trader_plan}**
-{lessons_line}
-**Risk Analysts Debate History:**
-{history}
-
----
-
-Be decisive and ground every conclusion in specific evidence from the analysts.{get_language_instruction()}"""
+        # Static system message + dynamic user message → higher cache hit rate.
+        system_content = (
+            "You are the Portfolio Manager. Synthesize the risk analysts' debate and deliver the final trading decision.\n\n"
+            "**Rating Scale** (use exactly one):\n"
+            "- **Buy**: Strong conviction to enter or add to position\n"
+            "- **Overweight**: Favorable outlook, gradually increase exposure\n"
+            "- **Hold**: Maintain current position, no action needed\n"
+            "- **Underweight**: Reduce exposure, take partial profits\n"
+            "- **Sell**: Exit position or avoid entry\n\n"
+            "Be decisive and ground every conclusion in specific evidence from the analysts."
+            + get_language_instruction()
+        )
+        user_content = (
+            f"{instrument_context}\n\n"
+            f"**Context:**\n"
+            f"- Research Manager's investment plan: **{research_plan}**\n"
+            f"- Trader's transaction proposal: **{trader_plan}**\n"
+            f"{lessons_line}"
+            f"**Risk Analysts Debate History:**\n{history}"
+        )
+        prompt = [
+            {"role": "system", "content": system_content},
+            {"role": "user", "content": user_content},
+        ]
 
         final_trade_decision = invoke_structured_or_freetext(
             structured_llm,
