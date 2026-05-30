@@ -198,24 +198,26 @@ def _get_stock_stats_bulk(
     from stockstats import wrap
 
     data = load_ohlcv(symbol, curr_date)
+    # stockstats.wrap() requires the date as the DataFrame index
+    if "Date" in data.columns:
+        data = data.set_index("Date")
     df = wrap(data)
-    df["Date"] = df["Date"].dt.strftime("%Y-%m-%d")
-    
-    # Calculate the indicator for all rows at once
-    df[indicator]  # This triggers stockstats to calculate the indicator
-    
-    # Create a dictionary mapping date strings to indicator values
+
+    # Trigger indicator calculation
+    df[indicator]
+
+    # Use index directly — StockDataFrame.__getitem__ intercepts "Date" as an
+    # indicator name and raises KeyError; the index is always safe.
+    date_strs = df.index.strftime("%Y-%m-%d")
+    indicator_series = df[indicator]
+
     result_dict = {}
-    for _, row in df.iterrows():
-        date_str = row["Date"]
-        indicator_value = row[indicator]
-        
-        # Handle NaN/None values
+    for date_str, indicator_value in zip(date_strs, indicator_series):
         if pd.isna(indicator_value):
             result_dict[date_str] = "N/A"
         else:
             result_dict[date_str] = str(indicator_value)
-    
+
     return result_dict
 
 

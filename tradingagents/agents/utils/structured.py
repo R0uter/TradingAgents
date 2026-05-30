@@ -51,6 +51,7 @@ def invoke_structured_or_freetext(
     prompt: Any,
     render: Callable[[T], str],
     agent_name: str,
+    _disabled: list = None,
 ) -> str:
     """Run the structured call and render to markdown; fall back to free-text on any failure.
 
@@ -58,16 +59,24 @@ def invoke_structured_or_freetext(
     invocations, a list of message dicts for chat models that take that
     shape). The same value is forwarded to the free-text path so the
     fallback sees the same input the structured call did.
+
+    ``_disabled`` is a mutable 1-element list used as a flag: once the
+    structured call fails once (e.g. provider returns None), it is set to
+    True so subsequent calls skip the structured path silently.
     """
-    if structured_llm is not None:
+    if structured_llm is not None and (_disabled is None or not _disabled):
         try:
             result = structured_llm.invoke(prompt)
+            if result is None:
+                raise ValueError("structured output returned None")
             return render(result)
         except Exception as exc:
             logger.warning(
-                "%s: structured-output invocation failed (%s); retrying once as free text",
+                "%s: structured-output invocation failed (%s); falling back to free text for this session",
                 agent_name, exc,
             )
+            if _disabled is not None:
+                _disabled.append(True)  # disable for all future calls
 
     response = plain_llm.invoke(prompt)
     return response.content

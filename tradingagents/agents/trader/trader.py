@@ -19,6 +19,7 @@ from tradingagents.agents.utils.structured import (
 
 def create_trader(llm):
     structured_llm = bind_structured(llm, TraderProposal, "Trader")
+    _disabled: list = []
 
     def trader_node(state, name):
         company_name = state["company_of_interest"]
@@ -55,6 +56,7 @@ def create_trader(llm):
             messages,
             render_trader_proposal,
             "Trader",
+            _disabled=_disabled,
         )
 
         return {

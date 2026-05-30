@@ -1,6 +1,25 @@
 from langchain_core.tools import tool
 from typing import Annotated
 from tradingagents.dataflows.interface import route_to_vendor
+from tradingagents.dataflows.earnings_calendar import fetch_earnings_calendar
+
+
+@tool
+def get_earnings_calendar(
+    ticker: Annotated[str, "ticker symbol"],
+    curr_date: Annotated[str, "current date you are trading at, yyyy-mm-dd"],
+) -> str:
+    """
+    Retrieve upcoming and recent earnings dates for a ticker.
+    Flags imminent earnings as high-risk binary events that can cause
+    large unpredictable price moves (±10-25%).
+    Args:
+        ticker (str): Ticker symbol of the company
+        curr_date (str): Current date you are trading at, yyyy-mm-dd
+    Returns:
+        str: Formatted earnings calendar with risk assessment
+    """
+    return fetch_earnings_calendar(ticker, curr_date)
 
 
 @tool

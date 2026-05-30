@@ -32,9 +32,42 @@ def yf_retry(func, max_retries=3, base_delay=2.0):
                 raise
 
 
+def _normalize_columns(data: pd.DataFrame) -> pd.DataFrame:
+    """Ensure the DataFrame has expected column names regardless of yfinance version quirks."""
+    data.columns = [c.strip() for c in data.columns]
+    # yfinance versions may produce 'date', 'Datetime', 'Date', or 'index' after reset_index()
+    lower_map = {c.lower(): c for c in data.columns}
+    if "Date" not in data.columns:
+        if "date" in lower_map:
+            data = data.rename(columns={lower_map["date"]: "Date"})
+        elif "datetime" in lower_map:
+            data = data.rename(columns={lower_map["datetime"]: "Date"})
+        elif "index" in data.columns:
+            # reset_index() on a nameless DatetimeIndex produces 'index'
+            data = data.rename(columns={"index": "Date"})
+    # Normalize OHLCV columns (some yfinance versions use lowercase)
+    canonical = {"open": "Open", "high": "High", "low": "Low", "close": "Close", "volume": "Volume"}
+    rename_map = {}
+    for lower_name, proper_name in canonical.items():
+        if proper_name not in data.columns and lower_name in lower_map:
+            rename_map[lower_map[lower_name]] = proper_name
+    if rename_map:
+        data = data.rename(columns=rename_map)
+    return data
+
+
 def _clean_dataframe(data: pd.DataFrame) -> pd.DataFrame:
     """Normalize a stock DataFrame for stockstats: parse dates, drop invalid rows, fill price gaps."""
+    # If Date is the index (e.g. CSV saved with index, or yfinance DatetimeIndex), promote it
+    if data.index.name in ("Date", "Datetime", "date", "datetime") or (
+        hasattr(data.index, "dtype") and str(data.index.dtype).startswith("datetime")
+    ):
+        data = data.reset_index()
+    data = _normalize_columns(data)
     data["Date"] = pd.to_datetime(data["Date"], errors="coerce")
+    # Strip timezone so tz-aware yfinance dates compare cleanly with naive Timestamps
+    if not data.empty and hasattr(data["Date"], "dt") and data["Date"].dt.tz is not None:
+        data["Date"] = data["Date"].dt.tz_localize(None)
     data = data.dropna(subset=["Date"])
 
     price_cols = [c for c in ["Open", "High", "Low", "Close", "Volume"] if c in data.columns]
@@ -119,12 +152,19 @@ class StockstatsUtils:
         ],
     ):
         data = load_ohlcv(symbol, curr_date)
+        # stockstats.wrap() requires the date as the DataFrame index
+        if "Date" in data.columns:
+            data = data.set_index("Date")
         df = wrap(data)
-        df["Date"] = df["Date"].dt.strftime("%Y-%m-%d")
         curr_date_str = pd.to_datetime(curr_date).strftime("%Y-%m-%d")
 
         df[indicator]  # trigger stockstats to calculate the indicator
-        matching_rows = df[df["Date"].str.startswith(curr_date_str)]
+
+        # Use index directly — StockDataFrame.__getitem__ intercepts "Date" as an
+        # indicator name and raises KeyError; the index is always safe.
+        date_strs = df.index.strftime("%Y-%m-%d")
+        mask = date_strs == curr_date_str
+        matching_rows = df[mask]
 
         if not matching_rows.empty:
             indicator_value = matching_rows[indicator].values[0]

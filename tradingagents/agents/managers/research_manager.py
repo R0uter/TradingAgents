@@ -15,6 +15,7 @@ from tradingagents.agents.utils.structured import (
 
 def create_research_manager(llm):
     structured_llm = bind_structured(llm, ResearchPlan, "Research Manager")
+    _disabled: list = []
 
     def research_manager_node(state) -> dict:
         instrument_context = build_instrument_context(state["company_of_interest"])
@@ -48,6 +49,7 @@ Commit to a clear stance whenever the debate's strongest arguments warrant one; 
             prompt,
             render_research_plan,
             "Research Manager",
+            _disabled=_disabled,
         )
 
         new_investment_debate_state = {

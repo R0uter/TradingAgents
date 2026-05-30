@@ -23,6 +23,7 @@ from tradingagents.agents.utils.structured import (
 
 def create_portfolio_manager(llm):
     structured_llm = bind_structured(llm, PortfolioDecision, "Portfolio Manager")
+    _disabled: list = []
 
     def portfolio_manager_node(state) -> dict:
         instrument_context = build_instrument_context(state["company_of_interest"])
@@ -69,6 +70,7 @@ Be decisive and ground every conclusion in specific evidence from the analysts.{
             prompt,
             render_pm_decision,
             "Portfolio Manager",
+            _disabled=_disabled,
         )
 
         new_risk_debate_state = {

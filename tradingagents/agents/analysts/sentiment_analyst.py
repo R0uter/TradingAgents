@@ -29,6 +29,7 @@ from tradingagents.agents.utils.agent_utils import (
 )
 from tradingagents.dataflows.reddit import fetch_reddit_posts
 from tradingagents.dataflows.stocktwits import fetch_stocktwits_messages
+from tradingagents.dataflows.earnings_calendar import fetch_earnings_calendar
 
 
 def _seven_days_back(trade_date: str) -> str:
@@ -55,6 +56,7 @@ def create_sentiment_analyst(llm):
         news_block = get_news.func(ticker, start_date, end_date)
         stocktwits_block = fetch_stocktwits_messages(ticker, limit=30)
         reddit_block = fetch_reddit_posts(ticker)
+        earnings_block = fetch_earnings_calendar(ticker, end_date)
 
         system_message = _build_system_message(
             ticker=ticker,
@@ -63,6 +65,7 @@ def create_sentiment_analyst(llm):
             news_block=news_block,
             stocktwits_block=stocktwits_block,
             reddit_block=reddit_block,
+            earnings_block=earnings_block,
         )
 
         prompt = ChatPromptTemplate.from_messages(
@@ -104,11 +107,19 @@ def _build_system_message(
     news_block: str,
     stocktwits_block: str,
     reddit_block: str,
+    earnings_block: str,
 ) -> str:
     """Assemble the sentiment-analyst system message with structured data blocks."""
-    return f"""You are a financial market sentiment analyst. Your task is to produce a comprehensive sentiment report for {ticker} covering the period from {start_date} to {end_date}, drawing on three complementary data sources that have already been collected for you.
+    return f"""You are a financial market sentiment analyst. Your task is to produce a comprehensive sentiment report for {ticker} covering the period from {start_date} to {end_date}, drawing on four complementary data sources that have already been collected for you.
 
 ## Data sources (pre-fetched, in this prompt)
+
+### Earnings Calendar — upcoming/recent earnings dates
+CRITICAL: Earnings reports are unpredictable binary events that can move a stock ±10-25% in a single session. If earnings are imminent, this MUST be prominently flagged as the dominant risk factor regardless of other sentiment signals.
+
+<start_of_earnings_calendar>
+{earnings_block}
+<end_of_earnings_calendar>
 
 ### News headlines — Yahoo Finance, past 7 days
 Institutional framing. Fact-driven, slower-moving signal.
@@ -147,7 +158,9 @@ Community discussion. Engagement signal via upvote score and comment count. Subr
 
 7. **Identify catalysts and risks** that emerge across sources — news of upcoming earnings, product launches, competitive threats, macro headlines, etc.
 
-8. **Past sentiment is not predictive.** Frame your conclusions as signal for the trader to weigh alongside fundamentals and technicals, not as a price call.
+8. **Earnings calendar is the highest-priority risk signal.** If the earnings calendar shows a report within 3 days, this overrides all other sentiment signals. No amount of bullish or bearish sentiment can reliably predict an earnings surprise. Flag imminent earnings as the #1 risk factor and recommend reduced confidence or a HOLD stance.
+
+9. **Past sentiment is not predictive.** Frame your conclusions as signal for the trader to weigh alongside fundamentals and technicals, not as a price call.
 
 ## Output
 
