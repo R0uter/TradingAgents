@@ -15,6 +15,7 @@ from tradingagents.agents.utils.structured import (
     bind_structured,
     invoke_structured_or_freetext,
 )
+from tradingagents.dataflows.earnings_calendar import fetch_earnings_calendar
 
 
 def create_trader(llm):
@@ -26,6 +27,23 @@ def create_trader(llm):
         asset_type = state.get("asset_type", "stock")
         instrument_context = build_instrument_context(company_name, asset_type)
         investment_plan = state["investment_plan"]
+        trade_date = state.get("trade_date", "")
+
+        # Inject earnings calendar — hard constraint for the trader
+        earnings_block = ""
+        if trade_date and asset_type == "stock":
+            earnings_info = fetch_earnings_calendar(company_name, trade_date)
+            if "HIGH-RISK BINARY EVENT" in earnings_info:
+                earnings_block = (
+                    f"\n\n⚠️ MANDATORY RISK OVERRIDE ⚠️\n{earnings_info}\n"
+                    "RULE: When earnings are within 3 days, you MUST recommend HOLD "
+                    "regardless of other signals. The risk of a ±10-25% gap makes any "
+                    "directional bet a coin flip. Only override this if the investment "
+                    "plan explicitly acknowledges the earnings risk and provides "
+                    "overwhelming evidence from 3+ independent sources.\n"
+                )
+            elif "MODERATE" in earnings_info:
+                earnings_block = f"\n\nEarnings Note: {earnings_info}\n"
 
         messages = [
             {
@@ -45,6 +63,7 @@ def create_trader(llm):
                     f"insights from current technical market trends, macroeconomic indicators, and "
                     f"social media sentiment. Use this plan as a foundation for evaluating your next "
                     f"trading decision.\n\nProposed Investment Plan: {investment_plan}\n\n"
+                    f"{earnings_block}"
                     f"Leverage these insights to make an informed and strategic decision."
                 ),
             },

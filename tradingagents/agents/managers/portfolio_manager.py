@@ -19,6 +19,7 @@ from tradingagents.agents.utils.structured import (
     bind_structured,
     invoke_structured_or_freetext,
 )
+from tradingagents.dataflows.earnings_calendar import fetch_earnings_calendar
 
 
 def create_portfolio_manager(llm):
@@ -32,6 +33,9 @@ def create_portfolio_manager(llm):
         risk_debate_state = state["risk_debate_state"]
         research_plan = state["investment_plan"]
         trader_plan = state["trader_investment_plan"]
+        trade_date = state.get("trade_date", "")
+        asset_type = state.get("asset_type", "stock")
+        company_name = state["company_of_interest"]
 
         past_context = state.get("past_context", "")
         lessons_line = (
@@ -39,6 +43,23 @@ def create_portfolio_manager(llm):
             if past_context
             else ""
         )
+
+        # Earnings risk override — hard constraint for PM
+        earnings_override = ""
+        if trade_date and asset_type == "stock":
+            earnings_info = fetch_earnings_calendar(company_name, trade_date)
+            if "HIGH-RISK BINARY EVENT" in earnings_info:
+                earnings_override = (
+                    f"\n\n⚠️ MANDATORY EARNINGS OVERRIDE ⚠️\n{earnings_info}\n"
+                    "ABSOLUTE RULE: Earnings within 3 days = HOLD. No exceptions. "
+                    "A ±10-25% gap makes any directional bet irrational. "
+                    "Your rating MUST be Hold when this warning is active.\n\n"
+                )
+            elif "MODERATE" in earnings_info:
+                earnings_override = (
+                    f"\n\nEarnings Note: {earnings_info}\n"
+                    "Consider reducing conviction (lean toward Hold/Underweight).\n\n"
+                )
 
         # Static system message + dynamic user message → higher cache hit rate.
         system_content = (
@@ -54,6 +75,7 @@ def create_portfolio_manager(llm):
         )
         user_content = (
             f"{instrument_context}\n\n"
+            f"{earnings_override}"
             f"**Context:**\n"
             f"- Research Manager's investment plan: **{research_plan}**\n"
             f"- Trader's transaction proposal: **{trader_plan}**\n"
