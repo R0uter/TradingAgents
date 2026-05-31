@@ -1,6 +1,27 @@
 from tradingagents.agents.utils.agent_utils import get_language_instruction
 
 
+# Static system message — identical across all tickers/dates → cacheable prefix.
+_CONSERVATIVE_SYSTEM = (
+    "You are the Conservative Risk Analyst. Your primary objective is to protect assets, "
+    "minimize volatility, and ensure steady, reliable growth. You prioritize stability, "
+    "security, and risk mitigation, carefully assessing potential losses, economic downturns, "
+    "and market volatility.\n\n"
+    "When evaluating the trader's decision or plan, critically examine high-risk elements, "
+    "pointing out where the decision may expose the firm to undue risk and where more cautious "
+    "alternatives could secure long-term gains.\n\n"
+    "Your task is to actively counter the arguments of the Aggressive and Neutral Analysts, "
+    "highlighting where their views may overlook potential threats or fail to prioritize "
+    "sustainability. Respond directly to their points, drawing from the provided data sources "
+    "to build a convincing case for a low-risk approach adjustment to the trader's decision.\n\n"
+    "Engage by questioning their optimism and emphasizing the potential downsides they may have "
+    "overlooked. Address each of their counterpoints to showcase why a conservative stance is "
+    "ultimately the safest path for the firm's assets. Focus on debating and critiquing their "
+    "arguments to demonstrate the strength of a low-risk strategy over their approaches. "
+    "Output conversationally as if you are speaking without any special formatting."
+)
+
+
 def create_conservative_debator(llm):
     def conservative_node(state) -> dict:
         risk_debate_state = state["risk_debate_state"]
@@ -17,21 +38,28 @@ def create_conservative_debator(llm):
 
         trader_decision = state["trader_investment_plan"]
 
-        prompt = f"""As the Conservative Risk Analyst, your primary objective is to protect assets, minimize volatility, and ensure steady, reliable growth. You prioritize stability, security, and risk mitigation, carefully assessing potential losses, economic downturns, and market volatility. When evaluating the trader's decision or plan, critically examine high-risk elements, pointing out where the decision may expose the firm to undue risk and where more cautious alternatives could secure long-term gains. Here is the trader's decision:
+        lang = get_language_instruction()
+        lang_line = f"\n{lang}" if lang else ""
 
-{trader_decision}
+        user_content = (
+            f"Trader's decision:\n{trader_decision}\n\n"
+            f"Market Research Report: {market_research_report}\n\n"
+            f"Social Media Sentiment Report: {sentiment_report}\n\n"
+            f"Latest World Affairs Report: {news_report}\n\n"
+            f"Company Fundamentals Report: {fundamentals_report}\n\n"
+            f"Current conversation history: {history}\n\n"
+            f"Last arguments from the aggressive analyst: {current_aggressive_response}\n\n"
+            f"Last arguments from the neutral analyst: {current_neutral_response}\n\n"
+            f"If there are no responses from the other viewpoints yet, present your own argument based on the available data."
+            f"{lang_line}"
+        )
 
-Your task is to actively counter the arguments of the Aggressive and Neutral Analysts, highlighting where their views may overlook potential threats or fail to prioritize sustainability. Respond directly to their points, drawing from the following data sources to build a convincing case for a low-risk approach adjustment to the trader's decision:
+        messages = [
+            {"role": "system", "content": _CONSERVATIVE_SYSTEM},
+            {"role": "user", "content": user_content},
+        ]
 
-Market Research Report: {market_research_report}
-Social Media Sentiment Report: {sentiment_report}
-Latest World Affairs Report: {news_report}
-Company Fundamentals Report: {fundamentals_report}
-Here is the current conversation history: {history} Here is the last response from the aggressive analyst: {current_aggressive_response} Here is the last response from the neutral analyst: {current_neutral_response}. If there are no responses from the other viewpoints yet, present your own argument based on the available data.
-
-Engage by questioning their optimism and emphasizing the potential downsides they may have overlooked. Address each of their counterpoints to showcase why a conservative stance is ultimately the safest path for the firm's assets. Focus on debating and critiquing their arguments to demonstrate the strength of a low-risk strategy over their approaches. Output conversationally as if you are speaking without any special formatting.""" + get_language_instruction()
-
-        response = llm.invoke(prompt)
+        response = llm.invoke(messages)
 
         argument = f"Conservative Analyst: {response.content}"
 
