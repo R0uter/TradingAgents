@@ -141,9 +141,18 @@ def create_sentiment_analyst(llm):
         # Pre-fetch all three sources. Each fetcher degrades gracefully and
         # returns a string (no exceptions surface from here), so the LLM
         # always sees something — either real data or a clear placeholder.
+        from tradingagents.dataflows.config import get_config
+        _cfg = get_config()
+
         news_block = get_news.func(ticker, start_date, end_date)
-        stocktwits_block = fetch_stocktwits_messages(ticker, limit=30)
-        reddit_block = fetch_reddit_posts(ticker)
+        if _cfg.get("disable_stocktwits"):
+            stocktwits_block = "<StockTwits disabled for backtest — realtime data not applicable>"
+        else:
+            stocktwits_block = fetch_stocktwits_messages(ticker, limit=30)
+        if _cfg.get("disable_reddit"):
+            reddit_block = "<Reddit disabled for backtest — realtime data not applicable>"
+        else:
+            reddit_block = fetch_reddit_posts(ticker)
         earnings_block = fetch_earnings_calendar(ticker, end_date)
 
         prompt = ChatPromptTemplate.from_messages(

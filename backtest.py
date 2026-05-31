@@ -1,15 +1,15 @@
 """
-backtest_tsla.py — TradingAgents backtester
+backtest.py — TradingAgents backtester
 ============================================
 Runs the TradingAgents framework day-by-day over a historical window,
 records each signal, then scores it against the actual next-day price move.
 Simulates a $100 portfolio and prints a full P&L summary.
 
 Usage (from the TradingAgents project root):
-    python backtest_tsla.py
+    python backtest.py
 
 Requirements: project venv must be active, or run with:
-    /path/to/venv/bin/python backtest_tsla.py
+    /path/to/venv/bin/python backtest.py
 
 Config: reads DEEPSEEK_API_KEY (and other keys) from .env automatically.
 Results are saved incrementally to backtest_results.csv so a partial run
@@ -45,7 +45,7 @@ from tradingagents.graph.trading_graph import TradingAgentsGraph
 from tradingagents.default_config import DEFAULT_CONFIG
 
 # ── Configuration ─────────────────────────────────────────────────────────────
-TICKER      = "TSLA"
+TICKER      = "TEAM"
 START_DATE  = "2024-10-01"   # first analysis date (agent looks at data up to here)
 END_DATE    = "2024-10-31"   # last analysis date
 INITIAL_CAPITAL = 100.0      # starting portfolio value in USD
@@ -71,6 +71,9 @@ config["quick_think_llm"] = "deepseek-v4-flash"
 config["backend_url"]     = "https://api.deepseek.com/v1"
 config["max_debate_rounds"]       = 1
 config["max_risk_discuss_rounds"] = 1
+config["analyst_concurrency_limit"] = 4
+config["disable_reddit"]          = True   # realtime posts not useful for backtest
+config["disable_stocktwits"]      = True   # realtime posts not useful for backtest
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
