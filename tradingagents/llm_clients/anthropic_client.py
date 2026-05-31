@@ -29,15 +29,37 @@ def _supports_effort(model: str) -> bool:
 
 
 class NormalizedChatAnthropic(ChatAnthropic):
-    """ChatAnthropic with normalized content output.
+    """ChatAnthropic with normalized content output and automatic prompt caching.
 
     Claude models with extended thinking or tool use return content as a
     list of typed blocks. This normalizes to string for consistent
     downstream handling.
+
+    Anthropic caches NOTHING without explicit ``cache_control`` markers —
+    unlike DeepSeek which auto-caches the longest common prefix. This
+    override injects ``cache_control: {type: ephemeral}`` on the system
+    message automatically so every agent gets system-level caching for free
+    without any per-agent changes.
     """
 
     def invoke(self, input, config=None, **kwargs):
         return normalize_content(super().invoke(input, config, **kwargs))
+
+    def _get_request_payload(self, input_, *, stop=None, **kwargs):
+        payload = super()._get_request_payload(input_, stop=stop, **kwargs)
+        system = payload.get("system")
+        if isinstance(system, str) and system:
+            # Plain string → wrap as a single cacheable block
+            payload["system"] = [
+                {"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}
+            ]
+        elif isinstance(system, list) and system:
+            # Already a list of blocks — mark the last one for caching
+            # (Anthropic caches everything UP TO the marked block)
+            last = system[-1]
+            if isinstance(last, dict) and "cache_control" not in last:
+                last["cache_control"] = {"type": "ephemeral"}
+        return payload
 
 
 class AnthropicClient(BaseLLMClient):

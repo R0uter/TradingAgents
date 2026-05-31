@@ -41,22 +41,34 @@ def create_neutral_debator(llm):
         lang = get_language_instruction()
         lang_line = f"\n{lang}" if lang else ""
 
-        user_content = (
+        # Stable block: trader_decision + reports identical across all 3 risk
+        # debators for the same ticker/date → Anthropic caches this large block.
+        reports_block = (
             f"Trader's decision:\n{trader_decision}\n\n"
             f"Market Research Report: {market_research_report}\n\n"
             f"Social Media Sentiment Report: {sentiment_report}\n\n"
             f"Latest World Affairs Report: {news_report}\n\n"
-            f"Company Fundamentals Report: {fundamentals_report}\n\n"
-            f"Current conversation history: {history}\n\n"
+            f"Company Fundamentals Report: {fundamentals_report}"
+            f"{lang_line}"
+        )
+
+        # Dynamic block: grows each round — never cached.
+        dynamic_block = (
+            f"\n\nCurrent conversation history: {history}\n\n"
             f"Last arguments from the aggressive analyst: {current_aggressive_response}\n\n"
             f"Last arguments from the conservative analyst: {current_conservative_response}\n\n"
             f"If there are no responses from the other viewpoints yet, present your own argument based on the available data."
-            f"{lang_line}"
         )
 
         messages = [
             {"role": "system", "content": _NEUTRAL_SYSTEM},
-            {"role": "user", "content": user_content},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": reports_block, "cache_control": {"type": "ephemeral"}},
+                    {"type": "text", "text": dynamic_block},
+                ],
+            },
         ]
 
         response = llm.invoke(messages)

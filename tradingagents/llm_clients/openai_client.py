@@ -65,6 +65,17 @@ def _input_to_messages(input_: Any) -> list:
     return []
 
 
+def _strip_anthropic_cache_control(payload: dict) -> dict:
+    for message in payload.get("messages", []):
+        content = message.get("content")
+        if not isinstance(content, list):
+            continue
+        for block in content:
+            if isinstance(block, dict):
+                block.pop("cache_control", None)
+    return payload
+
+
 class DeepSeekChatOpenAI(NormalizedChatOpenAI):
     """DeepSeek-specific overrides on top of the OpenAI-compatible client.
 
@@ -81,7 +92,9 @@ class DeepSeekChatOpenAI(NormalizedChatOpenAI):
     """
 
     def _get_request_payload(self, input_, *, stop=None, **kwargs):
-        payload = super()._get_request_payload(input_, stop=stop, **kwargs)
+        payload = _strip_anthropic_cache_control(
+            super()._get_request_payload(input_, stop=stop, **kwargs)
+        )
         outgoing = payload.get("messages", [])
         for message_dict, message in zip(outgoing, _input_to_messages(input_)):
             if not isinstance(message, AIMessage):

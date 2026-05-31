@@ -42,20 +42,34 @@ def create_bull_researcher(llm):
         lang = get_language_instruction()
         lang_line = f"\n{lang}" if lang else ""
 
-        user_content = (
+        # Stable block: reports are identical across all debate agents for the
+        # same ticker/date. Mark with cache_control so Anthropic caches this
+        # large block and all 5 debate agents (bull, bear, aggressive,
+        # conservative, neutral) get cache hits on it.
+        reports_block = (
             f"Argue the bull case for this {target_label}.\n\n"
             f"Market research report: {market_research_report}\n\n"
             f"Social media sentiment report: {sentiment_report}\n\n"
             f"Latest world affairs news: {news_report}\n\n"
-            f"{fundamentals_label}: {fundamentals_report}\n\n"
-            f"Conversation history of the debate: {history}\n\n"
-            f"Last bear argument: {current_response}"
+            f"{fundamentals_label}: {fundamentals_report}"
             f"{lang_line}"
+        )
+
+        # Dynamic block: grows each round — never cached.
+        dynamic_block = (
+            f"\n\nConversation history of the debate: {history}\n\n"
+            f"Last bear argument: {current_response}"
         )
 
         messages = [
             {"role": "system", "content": _BULL_SYSTEM},
-            {"role": "user", "content": user_content},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": reports_block, "cache_control": {"type": "ephemeral"}},
+                    {"type": "text", "text": dynamic_block},
+                ],
+            },
         ]
 
         response = llm.invoke(messages)
